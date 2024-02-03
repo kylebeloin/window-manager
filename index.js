@@ -6,11 +6,9 @@ import {
 
 const startBtn = document.querySelector("#start");
 const manager = await WindowManagerContext.init();
+import { script } from "./worker.js";
 
-const worker = new SharedWorker("worker.js", {
-  name: "worker",
-  type: "module",
-});
+const worker = new SharedWorker(script);
 
 const handler = new WindowManagerActionHandler(worker.port, callback);
 if (manager) {
@@ -42,6 +40,7 @@ startBtn.onclick = async () => {
  * @param {import("./manager/index.js").WindowManagerContext} context
  */
 function callback(context) {
+  console.log("callback", context);
   const windows = context.windows;
   for (const screen in windows) {
     createScreenUI(windows[screen]);

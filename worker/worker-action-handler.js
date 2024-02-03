@@ -44,32 +44,32 @@ export class WorkerActionHandler {
     };
 
     switch (action.type) {
-      case WorkerActions.INIT:
+      case "INIT":
         if (getWindows() === null) {
-          result.type = WindowActions.START;
+          result.type = "START";
           result.payload = setWindows(action.payload);
         } else {
           result.payload = getWindows();
         }
         break;
 
-      case WorkerActions.START:
+      case "START":
         port["id"] = action.payload.window.id;
         result.payload = addWindow(action.payload);
         this.sendMessage(result);
         return;
-      case WorkerActions.GET_WINDOWS:
+      case "GET_WINDOWS":
         result.payload = getWindows();
         break;
-      case WorkerActions.SET_WINDOWS:
+      case "SET_WINDOWS":
         result.payload = setWindows(action.payload);
         this.sendMessage(result);
         return;
-      case WorkerActions.ADD_WINDOW:
+      case "ADD_WINDOW":
         result.payload = addWindow(action.payload);
         this.sendMessage(result);
         return;
-      case WorkerActions.REMOVE_WINDOW:
+      case "REMOVE_WINDOW":
         result.payload = removeWindow(action.payload);
         const closedAction = WindowAction.from({
           type: WindowActions.CLOSED,

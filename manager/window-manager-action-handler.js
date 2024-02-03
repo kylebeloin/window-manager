@@ -25,7 +25,6 @@ export class WindowManagerActionHandler {
    * @param {Function|null} callback
    */
   constructor(port, callback = null) {
-    port.start();
     port.onmessage = async ({ data }) => {
       await this.dispatch(data, null);
     };
@@ -84,6 +83,7 @@ export class WindowManagerActionHandler {
       case WindowActions.UPDATE:
         if (context) {
           context.windows = action.payload;
+          console.log("WindowManagerContext updated", context.windows);
           if (this.callback) {
             this.callback(context);
           }

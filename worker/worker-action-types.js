@@ -27,9 +27,13 @@ const INIT = "INIT";
  * @type {'START'}
  */
 const START = "START";
+/**
+ * @type {"SUBSCRIBE"}
+ */
+const SUBSCRIBE = "SUBSCRIBE";
 
 /**
- * @typedef {(typeof START | typeof INIT | typeof LOG | typeof GET_WINDOWS | typeof SET_WINDOWS | typeof ADD_WINDOW | typeof REMOVE_WINDOW)} WorkerActionType
+ * @typedef {(typeof SUBSCRIBE | typeof START | typeof INIT | typeof LOG | typeof GET_WINDOWS | typeof SET_WINDOWS | typeof ADD_WINDOW | typeof REMOVE_WINDOW)} WorkerActionType
  */
 
 export const WorkerActionTypes = {
@@ -40,4 +44,5 @@ export const WorkerActionTypes = {
   LOG,
   INIT,
   START,
+  SUBSCRIBE,
 };
