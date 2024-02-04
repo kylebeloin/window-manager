@@ -1,0 +1,43 @@
+#screens {
+  display: flex;
+  flex-direction: row;
+}
+.screens {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.screen {
+  aspect-ratio: 1/1;
+  width: 100%;
+
+  border: 1px solid blue;
+}
+
+.title {
+}
+
+.toolbar {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+.windows {
+  display: flex;
+  flex-direction: column;
+}
+
+.window {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  justify-content: space-between;
+}
+
+:where(:not(:has(button))) {
+  flex-grow: 1;
+}

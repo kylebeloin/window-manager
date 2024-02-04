@@ -34,9 +34,17 @@ const START = "START";
  * @type {'CLOSED'}
  */
 const CLOSED = "CLOSED";
+/**
+ * @type {'REFRESH'}
+ */
+const REFRESH = "REFRESH";
+/**
+ * @type {"MOVE"}
+ */
+const MOVE = "MOVE";
 
 /**
- * @typedef {typeof CLOSED | typeof START | typeof INIT | typeof WHOIS | typeof LOG | typeof OPEN | typeof CLOSE | typeof IDENTIFY | typeof UPDATE} WindowManagerActionType
+ * @typedef {typeof MOVE | typeof REFRESH | typeof CLOSED | typeof START | typeof INIT | typeof WHOIS | typeof LOG | typeof OPEN | typeof CLOSE | typeof IDENTIFY | typeof UPDATE} WindowManagerActionType
  */
 
 export const WindowManagerActionTypes = {
@@ -49,4 +57,6 @@ export const WindowManagerActionTypes = {
   IDENTIFY,
   UPDATE,
   CLOSED,
+  REFRESH,
+  MOVE,
 };

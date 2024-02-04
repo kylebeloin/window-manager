@@ -1,12 +1,19 @@
 // @ts-check
 import { ManagedWindow } from "./managed-window.js";
+import { WindowManager } from "./window-manager.js";
+import { WindowManagerActionTypes as WindowActions } from "./window-manager-action-types.js";
+import * as T from "./types.js";
 
 /**
- * @typedef {{[key: string]: Object<string, ManagedWindow>}} ManagedWindows
+ * This holds information about the screen details across open windows, and communicates changes
+ * in its manager.
  */
-
 export class WindowManagerContext {
-  static async init() {
+  /**
+   * @param {function(WindowManagerContext):void} callback - callback to be called after the context is initialized
+   * @returns {Promise<WindowManagerContext|null>}
+   */
+  static async init(callback) {
     /**
      * @type {WindowManagerContext|null}
      */
@@ -14,7 +21,7 @@ export class WindowManagerContext {
     if (!context) {
       try {
         context = await window.getScreenDetails().then((details) => {
-          return new WindowManagerContext(details);
+          return new WindowManagerContext(details, callback);
         });
         Reflect.set(window, "manager", context);
       } catch (e) {
@@ -23,16 +30,17 @@ export class WindowManagerContext {
     }
     return context;
   }
-  /**
-   * A map made of unique screen labels and the windows on them.
-   * @type {ManagedWindows}
-   */
-  #windows = {};
 
   /**
-   * @type {ManagedWindow}
+   * @type {function(WindowManagerContext):void} callback - callback to be called after the context is initialized
    */
-  #activeWindow;
+  callback;
+
+  /**
+   * A map made of unique screen labels and the windows on them.
+   * @type {T.IManagedWindows}
+   */
+  #windows = {};
 
   /**
    * Tracks windows across screens
@@ -43,17 +51,27 @@ export class WindowManagerContext {
 
   set windows(value) {
     this.#windows = value;
-
+    this.callback(this);
     Reflect.set(window, "manager", this);
   }
 
-  get activeWindow() {
-    return this.#activeWindow;
-  }
+  /**
+   * @type {Map<string, string>}
+   */
+  get screens() {
+    const screenLabels = this.details.screens.reduce((acc, screen) => {
+      acc.set(screen.label, []);
+      return acc;
+    }, new Map());
 
-  set activeWindow(_window) {
-    this.#activeWindow = _window;
-    Reflect.set(window, "manager", this);
+    return Object.entries(this.windows).reduce((acc, [key, value]) => {
+      if (acc.has(value.screen.label)) {
+        acc.get(value.screen.label).push(key);
+      } else {
+        acc.set(value.screen.label, [key]);
+      }
+      return acc;
+    }, screenLabels);
   }
 
   /**
@@ -63,69 +81,109 @@ export class WindowManagerContext {
 
   /**
    * @param {ScreenDetails} details - initial details of the window manager
+   * @param {function(WindowManagerContext):void} callback - callback to be called after the context is initialized
    */
-  constructor(details) {
+  constructor(details, callback) {
     if (Reflect.get(window, "manager")) {
       throw new Error("WindowManagerContext is already initialized");
     }
-    /**
-     * @type {ManagedWindows}
-     */
-    const _windows = {};
-    // Set initial window labels to empty arrays
-    details.screens.forEach((screen) => {
-      _windows[screen.label] = {};
-    });
-    details.oncurrentscreenchange = (screen) => {
-      this.addWindow(this.activeWindow, screen.label);
-    };
+    this.callback = callback;
+    Object.defineProperty(this, "#windows", { enumerable: true });
     this.details = details;
-    this.windows = _windows;
-    this.activeWindow = new ManagedWindow(this);
-    this.addWindow(this.activeWindow, this.details.currentScreen.label);
+    this.manager = new WindowManager(details, this);
   }
 
-  newWindow() {
-    const newWindow = window.open(
-      "./",
-      "",
-      "fullscreen=yes,toolbar=no,location=no,menubar=no,scrollbars=no,resizable=no,status=no,titlebar=no,alwaysRaised=yes,dependent=yes"
+  /**
+   * @param {string} [screenLabel]
+   */
+  newWindow(screenLabel) {
+    let screen = this.details.screens.find(
+      (screen) => screen.label === screenLabel
     );
-    if (newWindow) {
+    if (!screen) {
+      screen = this.details.currentScreen;
+    }
+    const { availTop, availLeft, width, height } = screen;
+    const newWindow = window.open(
+      "/",
+      "_blank",
+      `top=${availTop}, left=${availLeft}, width=${width}, height=${height}`
+    );
+
+    newWindow?.addEventListener("beforeunload", () => {
+      this.removeWindow(this.manager.managed);
+    });
+  }
+
+  /**
+   *
+   * @param {string} id
+   */
+  closeWindow(id) {
+    if (this.manager.managed.id === id) {
+      window.close();
     } else {
-      console.error("Failed to open new window");
+      this.manager.sendMessage(WindowActions.CLOSE, {
+        id,
+      });
     }
   }
 
-  /**
-   * @param {ManagedWindow} newWindow
-   * @param {string} screenLabel
-   */
-  addWindow(newWindow, screenLabel) {
-    if (newWindow.screen.label !== screenLabel) {
-      this.removeWindow(newWindow, newWindow.screen.label);
-    }
-    this.windows = {
-      ...this.windows,
-      [screenLabel]: {
-        ...this.windows[screenLabel],
-        [newWindow.id]: newWindow,
-      },
-    };
+  getWindows() {
+    return this.windows;
   }
 
   /**
-   * @param {ManagedWindow} newWindow
-   * @param {string} screenLabel
+   * @param {T.IManagedWindows} value
    */
-  removeWindow(newWindow, screenLabel) {
+  setWindows(value) {
+    this.windows = value;
+  }
+
+  /**
+   * @param {T.IManagedWindow} newWindow
+   * @returns {T.IManagedWindows}
+   */
+  addWindow(newWindow) {
     this.windows = {
       ...this.windows,
-      [screenLabel]: {
-        ...this.windows[screenLabel],
-        [newWindow.id]: null,
+      [newWindow.id]: {
+        ...newWindow,
       },
     };
+    return this.windows;
+  }
+
+  /**
+   * @param {ManagedWindow} oldWindow
+   */
+  removeWindow(oldWindow) {
+    const { [oldWindow.id]: _, ...rest } = this.windows;
+    this.windows = rest;
+    return this.windows;
+  }
+
+  refreshWindows() {
+    this.manager.sendMessage(WindowActions.REFRESH, {});
+    window.history.go(0);
+  }
+
+  moveWindow(windowId, screenLabel) {
+    console.log("moveWindow", windowId, screenLabel);
+    if (windowId === this.manager.managed.id) {
+      const screen = this.details.screens.find(
+        (screen) => screen.label === screenLabel
+      );
+      if (screen) {
+        window.moveTo(screen.availLeft, screen.availTop);
+        window.resizeTo(screen.width, screen.height);
+      }
+    } else {
+      this.manager.sendMessage(WindowActions.MOVE, {
+        id: windowId,
+        screenLabel,
+      });
+    }
   }
 }
 

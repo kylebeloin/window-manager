@@ -1,97 +1,129 @@
 // @ts-check
 import {
-  WindowManagerActionHandler,
   WindowManagerContext,
+  WindowManagerActionTypes as WindowActions,
+  ManagedWindow,
 } from "./manager/index.js";
+import * as T from "./manager/types.js";
 
 const startBtn = document.querySelector("#start");
-const manager = await WindowManagerContext.init();
-import { script } from "./worker.js";
+const context = await WindowManagerContext.init(callback);
 
-const worker = new SharedWorker(script);
-
-const handler = new WindowManagerActionHandler(worker.port, callback);
-if (manager) {
-  await handler.start(manager);
-}
-window.onbeforeunload = async () => {
-  await handler.dispatch(
-    {
-      type: "CLOSE",
-      payload: manager?.activeWindow,
-      response: "REMOVE_WINDOW",
-    },
-    null
-  );
-};
 // @ts-ignore
 startBtn.onclick = async () => {
-  await handler.dispatch(
-    {
-      type: "OPEN",
-      payload: null,
-      response: "ADD_WINDOW",
-    },
-    manager
-  );
-  await window.document.documentElement.requestFullscreen();
+  context?.newWindow();
 };
 /**
  * @param {import("./manager/index.js").WindowManagerContext} context
  */
 function callback(context) {
   console.log("callback", context);
+  const screens = context.screens;
   const windows = context.windows;
-  for (const screen in windows) {
-    createScreenUI(windows[screen]);
-  }
+
+  createScreenUI(context);
 }
 
 /**
  *
- * @param {Object<string,import("./manager/index.js").ManagedWindow>} screen
+ * @param {WindowManagerContext} context
  */
-function createScreenUI(screen) {
+function createScreenUI(context) {
+  const screens = context.screens;
+  const windows = context.windows;
   const body = document.getElementById("screens");
+  const refreshButton = document.getElementById("refresh");
   body.innerHTML = "";
-  const screenEl = document.createElement("div");
-  screenEl.classList.add("screen");
-  body?.appendChild(screenEl);
+  const screensEl = document.createElement("div");
+  if (refreshButton) {
+    refreshButton.textContent = "Refresh";
+    refreshButton.onclick = () => {
+      context.refreshWindows();
+    };
+  }
 
-  for (const id in screen) {
-    console.log("createWindowUI", screen[id]);
-    if (!screen[id].window.hasOpener) {
-      continue;
+  screensEl.classList.add("screens");
+
+  body?.appendChild(screensEl);
+
+  for (const [label, windowIds] of screens) {
+    const screenEl = document.createElement("div");
+    const toolbarEl = document.createElement("div");
+    toolbarEl.classList.add("toolbar");
+    const addBtn = document.createElement("button");
+    addBtn.textContent = "Add Window to Screen";
+    addBtn.onclick = () => {
+      context.newWindow(label);
+    };
+    screenEl.classList.add("screen");
+
+    const labelEl = document.createElement("p");
+    labelEl.classList.add("title");
+    labelEl.textContent = label;
+
+    toolbarEl.appendChild(labelEl);
+    toolbarEl.appendChild(addBtn);
+
+    screenEl.appendChild(toolbarEl);
+    const windowsEl = document.createElement("div");
+    windowsEl.classList.add("windows");
+    for (const windowId of windowIds) {
+      const windowEl = createWindowUI(windows[windowId], windowsEl);
+      let dropdown = createDropdown(screens, label);
+      dropdown.onchange = () => {
+        context.moveWindow(windowId, dropdown.value);
+      };
+      windowEl.appendChild(dropdown);
     }
-    createWindowUI(screen[id], screenEl);
+    screenEl.appendChild(windowsEl);
+
+    screensEl.appendChild(screenEl);
   }
 }
 
 /**
  *
- * @param {import("./manager/index.js").ManagedWindow} managedWindow
+ * @param {T.IManagedWindow} managedWindow
  * @param {HTMLDivElement} screenEl
  */
 function createWindowUI(managedWindow, screenEl) {
   const windowEl = document.createElement("div");
-  const paraEl = document.createElement("p");
-  paraEl.textContent = managedWindow.id;
-  windowEl.appendChild(paraEl);
+  const idEl = document.createElement("p");
+
+  idEl.textContent = managedWindow.id;
+
+  windowEl.appendChild(idEl);
   windowEl.classList.add("window");
   // Create window buttons
-  const closeBtn = document.createElement("button");
-  closeBtn.onclick = async () => {
-    await handler.dispatch(
-      {
-        type: "CLOSE",
-        payload: managedWindow,
-        response: "REMOVE_WINDOW",
-      },
-      null
-    );
-  };
-  closeBtn.textContent = "X";
-  windowEl.appendChild(closeBtn);
+  if (managedWindow.window.hasOpener) {
+    const closeBtn = document.createElement("button");
+    closeBtn.onclick = () => {
+      context?.closeWindow(managedWindow.id);
+    };
+    closeBtn.textContent = "X";
+    windowEl.appendChild(closeBtn);
+  }
   screenEl.appendChild(windowEl);
-  return window;
+  return windowEl;
+}
+
+/**
+ *
+ * @param {Map<string, string>} screens
+ * @param {string} _label
+ * @returns
+ */
+function createDropdown(screens, _label) {
+  const select = document.createElement("select");
+
+  for (const [label] of screens) {
+    const option = document.createElement("option");
+    if (label === _label) {
+      option.selected = true;
+    }
+    option.value = label;
+    option.textContent = label;
+    select.appendChild(option);
+  }
+  return select;
 }
